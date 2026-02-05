@@ -15,6 +15,11 @@ beforeAll(async () => {
 
 	// Login admin user
 	const adminLogin = await request(app).put('/api/auth').send({ email: 'a@jwt.com', password: 'admin' });
+	console.log('Admin login status:', adminLogin.status);
+    console.log('Admin login body:', adminLogin.body);
+    if (!adminLogin.body.token) {
+        throw new Error('Failed to login as admin');
+    }
 	adminAuthToken = adminLogin.body.token;
 
 	// Register franchisee user
