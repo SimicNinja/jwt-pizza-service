@@ -1,5 +1,6 @@
 const request = require('supertest');
 const app = require('./service');
+const { DB } = require('./database/database.js');
 
 let franchiseeUser = { name: 'franchisee user', email: Math.random().toString(36).substring(2, 12) + '@test.com', password: 'franchisee' };
 let testUser = { name: 'test diner', email: Math.random().toString(36).substring(2, 12) + '@test.com', password: 'test' };
@@ -10,6 +11,8 @@ let testFranchise;
 let testStore;
 
 beforeAll(async () => {
+	await DB.initialized;
+
 	// Login admin user
 	const adminLogin = await request(app).put('/api/auth').send({ email: 'a@jwt.com', password: 'admin' });
 	adminAuthToken = adminLogin.body.token;

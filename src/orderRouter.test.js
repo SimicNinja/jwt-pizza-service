@@ -1,5 +1,6 @@
 const request = require('supertest');
 const app = require('./service');
+const { DB } = require('./database/database.js');
 
 let testUser = { name: 'test diner', email: Math.random().toString(36).substring(2, 12) + '@test.com', password: 'test' };
 let adminAuthToken;
@@ -7,6 +8,8 @@ let testUserAuthToken;
 let testMenuItemId;
 
 beforeAll(async () => {
+	await DB.initialized;
+
 	// Login admin user
 	const adminLogin = await request(app).put('/api/auth').send({ email: 'a@jwt.com', password: 'admin' });
 	adminAuthToken = adminLogin.body.token;
