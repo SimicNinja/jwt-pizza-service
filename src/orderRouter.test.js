@@ -1,6 +1,5 @@
 const request = require('supertest');
 const app = require('./service');
-const e = require('express');
 
 let testUser = { name: 'test diner', email: Math.random().toString(36).substring(2, 12) + '@test.com', password: 'test' };
 let adminAuthToken;
