@@ -1,7 +1,8 @@
 const request = require('supertest');
 const app = require('./service');
-const { DB } = require('./database/database.js');
+const {DB, Role} = require('./database/database.js');
 
+let adminUser = { name: 'admin user', email: Math.random().toString(36).substring(2, 12) + '@admin.com', password: 'admin', roles: [{role: Role.Admin}]};
 let testUser = { name: 'test diner', email: Math.random().toString(36).substring(2, 12) + '@test.com', password: 'test' };
 let adminAuthToken;
 let testUserAuthToken;
@@ -10,8 +11,16 @@ let testMenuItemId;
 beforeAll(async () => {
 	await DB.initialized;
 
-	// Login admin user
-	const adminLogin = await request(app).put('/api/auth').send({ email: 'a@jwt.com', password: 'admin' });
+	// Wait for database to initialize
+	await DB.initialized;
+	
+	// Register and login admin user
+	await DB.addUser(adminUser);
+	const adminLogin = await request(app).put('/api/auth').send({ email: adminUser.email, password: adminUser.password });	
+
+	if(!adminLogin.body.token){
+		throw new Error('Admin login failed');
+	}
 	adminAuthToken = adminLogin.body.token;
 
 	// Register test user
