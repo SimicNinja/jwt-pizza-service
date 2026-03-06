@@ -106,7 +106,7 @@ jobs:
         with:
           audience: sts.amazonaws.com
           aws-region: us-east-1
-          role-to-assume: arn:aws:iam::055929692419:role/github-ci
+          role-to-assume: arn:aws:iam::${{secrets.AWS_ACCOUNT}}:role/${{secrets.CI_AIM_ROLE}}
 
       - name: Login to Amazon ECR
         id: login-ecr
