@@ -1,4 +1,5 @@
 const config = require('./config');
+const os = require('os');
 
 // Metrics stored in memory
 const requests = {};
@@ -49,6 +50,12 @@ setInterval(() => {
 	// Send auth attempts with labels for success/failure
 	metrics.push(createMetric('authAttempts', authAttempts.success, '1', 'sum', 'asInt', { result: 'success' }));
 	metrics.push(createMetric('authAttempts', authAttempts.failure, '1', 'sum', 'asInt', { result: 'failure' }));
+
+	// Send system metrics
+	const cpuUsage = getCpuUsagePercentage();
+	const memoryUsage = getMemoryUsagePercentage();
+	metrics.push(createMetric('cpu', cpuUsage, '%', 'gauge', 'asDouble', {}));
+	metrics.push(createMetric('memory', memoryUsage, '%', 'gauge', 'asDouble', {}));
 
 	sendMetricToGrafana(metrics);
 }, 10000);
@@ -116,6 +123,19 @@ function sendMetricToGrafana(metrics) {
 		.catch((error) => {
 		console.error('Error pushing metrics:', error);
 		});
+}
+
+function getCpuUsagePercentage() {
+	const cpuUsage = os.loadavg()[0] / os.cpus().length;
+	return cpuUsage.toFixed(2) * 100;
+}
+
+function getMemoryUsagePercentage() {
+	const totalMemory = os.totalmem();
+	const freeMemory = os.freemem();
+	const usedMemory = totalMemory - freeMemory;
+	const memoryUsage = (usedMemory / totalMemory) * 100;
+	return memoryUsage.toFixed(2);
 }
 
 module.exports = { requestTracker, authAttemptSuccess, authAttemptFailure };
