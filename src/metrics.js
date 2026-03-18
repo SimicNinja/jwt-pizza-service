@@ -2,18 +2,31 @@ const config = require('./config');
 
 // Metrics stored in memory
 const requests = {};
-let greetingChangedCount = 0;
+const activeUsers = new Map(); // Map<userId, lastSeenTimestamp>
+const ACTIVE_USER_WINDOW = 5 * 60 * 1000; // 5 minutes in milliseconds
+let authAttempts = { success: 0, failure: 0 };
 
-// Function to track when the greeting is changed
-function greetingChanged() {
-	greetingChangedCount++;
-}
 
 // Middleware to track requests
 function requestTracker(req, res, next) {
 	const endpoint = `[${req.method}] ${req.path}`;
 	requests[endpoint] = (requests[endpoint] || 0) + 1;
+
+	// Track active users if authenticated
+	if (req.user && req.user.id) {
+		activeUsers.set(req.user.id, Date.now());
+	}
+
 	next();
+}
+
+// Track authentication attempts
+function authAttemptSuccess() {
+	authAttempts.success++;
+}
+
+function authAttemptFailure() {
+	authAttempts.failure++;
 }
 
 // This will periodically send metrics to Grafana
@@ -23,13 +36,25 @@ setInterval(() => {
 		metrics.push(createMetric('requests', requests[endpoint], '1', 'sum', 'asInt', { endpoint }));
 	});
 
-	metrics.push(createMetric('greetingChange', greetingChangedCount, '1', 'sum', 'asInt', {}));
+	// Clean up old active users and count current ones
+	const now = Date.now();
+	for (const [userId, lastSeen] of activeUsers.entries()) {
+		if (now - lastSeen > ACTIVE_USER_WINDOW) {
+			activeUsers.delete(userId);
+		}
+	}
+	const activeUserCount = activeUsers.size;
+	metrics.push(createMetric('activeUsers', activeUserCount, '1', 'gauge', 'asInt', {}));
+
+	// Send auth attempts with labels for success/failure
+	metrics.push(createMetric('authAttempts', authAttempts.success, '1', 'sum', 'asInt', { result: 'success' }));
+	metrics.push(createMetric('authAttempts', authAttempts.failure, '1', 'sum', 'asInt', { result: 'failure' }));
 
 	sendMetricToGrafana(metrics);
 }, 10000);
 
 function createMetric(metricName, metricValue, metricUnit, metricType, valueType, attributes) {
-	attributes = { ...attributes	, source: config.source };
+	attributes = { ...attributes	, source: config.metrics.source };
 
 	const metric = {
 		name: metricName,
@@ -73,14 +98,19 @@ function sendMetricToGrafana(metrics) {
 		],
 	};
 
-	fetch(`${config.endpointUrl}`, {
+	const bodyString = JSON.stringify(body);
+	fetch(`${config.metrics.endpointUrl}`, {
 		method: 'POST',
-		body: JSON.stringify(body),
-		headers: { Authorization: `Bearer ${config.accountId}:${config.apiKey}`, 'Content-Type': 'application/json' },
+		body: bodyString,
+		headers: { Authorization: `Bearer ${config.metrics.accountId}:${config.metrics.apiKey}`, 'Content-Type': 'application/json' },
 	})
 		.then((response) => {
 		if (!response.ok) {
-			throw new Error(`HTTP status: ${response.status}`);
+			response.text().then((text) => {
+				console.error(`Failed to push metrics data to Grafana: ${text}\n${bodyString}`);
+			});
+		} else {
+			console.log(`Successfully pushed ${metrics.length} metrics to Grafana`);
 		}
 		})
 		.catch((error) => {
@@ -88,4 +118,4 @@ function sendMetricToGrafana(metrics) {
 		});
 }
 
-module.exports = { requestTracker, greetingChanged };
+module.exports = { requestTracker, authAttemptSuccess, authAttemptFailure };
