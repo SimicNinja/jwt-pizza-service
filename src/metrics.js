@@ -7,6 +7,7 @@ const activeUsers = new Map(); // Map<userId, lastSeenTimestamp>
 const ACTIVE_USER_WINDOW = 5 * 60 * 1000; // 5 minutes in milliseconds
 let authAttempts = { success: 0, failure: 0 };
 let pizzaMetrics = { sold: 0, failures: 0, revenue: 0 };
+let latencyMetrics = { service: 0, factory: 0 };
 
 
 // Middleware to track requests
@@ -18,6 +19,13 @@ function requestTracker(req, res, next) {
 	if (req.user && req.user.id) {
 		activeUsers.set(req.user.id, Date.now());
 	}
+
+	// Track service latency
+	const startTime = Date.now();
+	res.on('finish', () => {
+		const duration = Date.now() - startTime;
+		latencyMetrics.service += duration;
+	});
 
 	next();
 }
@@ -39,6 +47,11 @@ function pizzaPurchaseSuccess(numPizzas, totalRevenue) {
 
 function pizzaPurchaseFailure(numPizzas) {
 	pizzaMetrics.failures += numPizzas;
+}
+
+// Track factory latency
+function pizzaFactoryLatency(duration) {
+	latencyMetrics.factory += duration;
 }
 
 // This will periodically send metrics to Grafana
@@ -72,6 +85,10 @@ setInterval(() => {
 	metrics.push(createMetric('pizzasSold', pizzaMetrics.sold, '1', 'sum', 'asInt', {}));
 	metrics.push(createMetric('pizzaFailures', pizzaMetrics.failures, '1', 'sum', 'asInt', {}));
 	metrics.push(createMetric('pizzaRevenue', pizzaMetrics.revenue, 'USD', 'sum', 'asDouble', {}));
+
+	// Send latency metrics (cumulative milliseconds)
+	metrics.push(createMetric('serviceLatency', latencyMetrics.service, 'ms', 'sum', 'asInt', {}));
+	metrics.push(createMetric('factoryLatency', latencyMetrics.factory, 'ms', 'sum', 'asInt', {}));
 
 	sendMetricToGrafana(metrics);
 }, 10000);
@@ -154,4 +171,4 @@ function getMemoryUsagePercentage() {
 	return memoryUsage.toFixed(2);
 }
 
-module.exports = { requestTracker, authAttemptSuccess, authAttemptFailure, pizzaPurchaseSuccess, pizzaPurchaseFailure };
+module.exports = { requestTracker, authAttemptSuccess, authAttemptFailure, pizzaPurchaseSuccess, pizzaPurchaseFailure, pizzaFactoryLatency };

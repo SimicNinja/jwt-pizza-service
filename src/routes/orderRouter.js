@@ -85,11 +85,16 @@ orderRouter.post(
     const numPizzas = order.items.length;
     const totalRevenue = order.items.reduce((sum, item) => sum + item.price, 0);
 
+    // Track factory latency
+    const factoryStartTime = Date.now();
     const r = await fetch(`${config.factory.url}/api/order`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', authorization: `Bearer ${config.factory.apiKey}` },
       body: JSON.stringify({ diner: { id: req.user.id, name: req.user.name, email: req.user.email }, order }),
     });
+    const factoryDuration = Date.now() - factoryStartTime;
+    metrics.pizzaFactoryLatency(factoryDuration);
+
     const j = await r.json();
     if (r.ok) {
       metrics.pizzaPurchaseSuccess(numPizzas, totalRevenue);
