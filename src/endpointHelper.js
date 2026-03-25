@@ -1,4 +1,3 @@
-const config = require('./config.js');
 const logger = require('./logger.js');
 
 class StatusCodeError extends Error {
