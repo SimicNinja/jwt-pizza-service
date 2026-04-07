@@ -3,17 +3,18 @@ const os = require('os');
 
 // Metrics stored in memory
 const requests = {};
+const requestsByMethod = {};
 const activeUsers = new Map(); // Map<userId, lastSeenTimestamp>
 const ACTIVE_USER_WINDOW = 5 * 60 * 1000; // 5 minutes in milliseconds
 let authAttempts = { success: 0, failure: 0 };
 let pizzaMetrics = { sold: 0, failures: 0, revenue: 0 };
 let latencyMetrics = { service: 0, factory: 0 };
 
-
 // Middleware to track requests
 function requestTracker(req, res, next) {
 	const endpoint = `[${req.method}] ${req.path}`;
 	requests[endpoint] = (requests[endpoint] || 0) + 1;
+	requestsByMethod[req.method] = (requestsByMethod[req.method] || 0) + 1;
 
 	// Track active users if authenticated
 	if (req.user && req.user.id) {
@@ -58,7 +59,14 @@ function pizzaFactoryLatency(duration) {
 setInterval(() => {
 	const metrics = [];
 	Object.keys(requests).forEach((endpoint) => {
-		metrics.push(createMetric('requests', requests[endpoint], '1', 'sum', 'asInt', { endpoint }));
+	const endpointParts = endpoint.match(/^\[([^\]]+)\]\s+(.*)$/);
+	const method = endpointParts?.[1] || 'UNKNOWN';
+	const path = endpointParts?.[2] || endpoint;
+	metrics.push(createMetric('requests', requests[endpoint], '1', 'sum', 'asInt', { endpoint, method, path }));
+	});
+
+	Object.keys(requestsByMethod).forEach((method) => {
+	metrics.push(createMetric('requestsByMethod', requestsByMethod[method], '1', 'sum', 'asInt', { method }));
 	});
 
 	// Clean up old active users and count current ones
@@ -94,7 +102,7 @@ setInterval(() => {
 }, 10000);
 
 function createMetric(metricName, metricValue, metricUnit, metricType, valueType, attributes) {
-	attributes = { ...attributes	, source: config.metrics.source };
+	attributes = { ...attributes, source: config.metrics.source };
 
 	const metric = {
 		name: metricName,
@@ -117,10 +125,10 @@ function createMetric(metricName, metricValue, metricUnit, metricType, valueType
 		});
 	});
 
-	if (metricType === 'sum') {
-		metric[metricType].aggregationTemporality = 'AGGREGATION_TEMPORALITY_CUMULATIVE';
-		metric[metricType].isMonotonic = true;
-	}
+  if (metricType === 'sum') {
+    metric[metricType].aggregationTemporality = 'AGGREGATION_TEMPORALITY_CUMULATIVE';
+    metric[metricType].isMonotonic = true;
+  }
 
 	return metric;
 }
@@ -144,7 +152,7 @@ function sendMetricToGrafana(metrics) {
 		body: bodyString,
 		headers: { Authorization: `Bearer ${config.metrics.accountId}:${config.metrics.apiKey}`, 'Content-Type': 'application/json' },
 	})
-		.then((response) => {
+	.then((response) => {
 		if (!response.ok) {
 			response.text().then((text) => {
 				console.error(`Failed to push metrics data to Grafana: ${text}\n${bodyString}`);
@@ -152,10 +160,10 @@ function sendMetricToGrafana(metrics) {
 		} else {
 			console.log(`Successfully pushed ${metrics.length} metrics to Grafana`);
 		}
-		})
-		.catch((error) => {
+	})
+	.catch((error) => {
 		console.error('Error pushing metrics:', error);
-		});
+	});
 }
 
 function getCpuUsagePercentage() {
