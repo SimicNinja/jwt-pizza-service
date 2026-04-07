@@ -86,7 +86,7 @@ orderRouter.post(
 
     // Calculate pizza metrics
     const numPizzas = order.items.length;
-    const totalRevenue = order.items.reduce((sum, item) => sum + item.price, 0);
+    const totalRevenue = order.items.reduce((sum, item) => sum + Number(item.price), 0);
 
     // Track factory latency
     const factoryStartTime = Date.now();
