@@ -9,7 +9,7 @@ const ACTIVE_USER_WINDOW = 5 * 60 * 1000; // 5 minutes in milliseconds
 let authAttempts = { success: 0, failure: 0 };
 let pizzaMetrics = { sold: 0, failures: 0, revenue: 0 };
 let latencyMetrics = { service: 0, factory: 0 };
-let chaosMetrics = { enabled: 0, toggles: 0, injectedFailures: 0 };
+let chaosMetrics = { enabled: 0, injectedFailures: 0 };
 
 // Middleware to track requests
 function requestTracker(req, res, next) {
@@ -58,7 +58,6 @@ function pizzaFactoryLatency(duration) {
 
 function chaosToggle(enabled) {
 	chaosMetrics.enabled = enabled ? 1 : 0;
-	chaosMetrics.toggles++;
 }
 
 function chaosInjectedFailure() {

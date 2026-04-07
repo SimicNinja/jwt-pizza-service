@@ -137,4 +137,18 @@ orderRouter.put(
   })
 );
 
+orderRouter.put(
+  'chaos/kill',
+  authRouter.authenticateToken,
+  asyncHandler(async (req, res) => {
+    if (req.user.isRole(Role.Admin)) {
+      enableChaos = false;
+      metrics.chaosToggle(enableChaos);
+      logger.log('error', 'chaosKill', { message: 'Chaos killed by admin', userId: req.user.id });
+    }
+
+    res.json({ chaos: enableChaos });
+  })
+);
+
 module.exports = orderRouter;
