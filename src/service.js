@@ -12,6 +12,10 @@ const app = express();
 app.use(express.json());
 app.use(setAuthUser);
 app.use((req, res, next) => {
+  req.requestId = req.headers['x-request-id'] || `${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+  next();
+});
+app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -51,9 +55,28 @@ app.use('*', (req, res) => {
 
 // Default error handler for all exceptions and errors.
 app.use((err, req, res, next) => {
-  logger.log('error', 'unhandledError', { message: err.message, stack: err.statusCode });
-  res.status(err.statusCode ?? 500).json({ message: err.message, stack: err.stack });
-  next();
+  void next;
+  const statusCode = Number.isInteger(err?.statusCode) ? err.statusCode : 500;
+  const message = err?.message || 'internal server error';
+  const code = err?.code || 'UNHANDLED_ERROR';
+  const details = err?.details;
+  const causeMessage = err?.cause?.message;
+
+  logger.log('error', 'unhandledError', {
+    requestId: req.requestId,
+    method: req.method,
+    path: req.originalUrl,
+    userId: req.user?.id,
+    statusCode,
+    code,
+    message,
+    details,
+    cause: causeMessage,
+    stack: err?.stack,
+  });
+
+  const clientMessage = statusCode >= 500 && err?.expose !== true ? 'internal server error' : message;
+  return res.status(statusCode).json({ message: clientMessage, statusCode, requestId: req.requestId, code });
 });
 
 module.exports = app;

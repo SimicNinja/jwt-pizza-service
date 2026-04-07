@@ -1,10 +1,11 @@
-const logger = require('./logger.js');
-
 class StatusCodeError extends Error {
-  constructor(message, statusCode) {
-    super(message);
+  constructor(message, statusCode = 500, options = {}) {
+    super(message, options.cause ? { cause: options.cause } : undefined);
+    this.name = 'StatusCodeError';
     this.statusCode = statusCode;
-    logger.log('error', 'unhandledError', { message: this.message, status: this.statusCode})
+    this.code = options.code;
+    this.details = options.details;
+    this.expose = options.expose ?? statusCode < 500;
   }
 }
 
