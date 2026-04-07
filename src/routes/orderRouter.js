@@ -138,7 +138,7 @@ orderRouter.put(
 );
 
 orderRouter.put(
-  'chaos/kill',
+  '/chaos/kill',
   authRouter.authenticateToken,
   asyncHandler(async (req, res) => {
     if (req.user.isRole(Role.Admin)) {

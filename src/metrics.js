@@ -197,4 +197,4 @@ function getMemoryUsagePercentage() {
 	return memoryUsage.toFixed(2);
 }
 
-module.exports = { requestTracker, authAttemptSuccess, authAttemptFailure, pizzaPurchaseSuccess, pizzaPurchaseFailure, pizzaFactoryLatency, chaosToggle, chaosInjectedFailure };
+module.exports = { requestTracker, authAttemptSuccess, authAttemptFailure, pizzaPurchaseSuccess, pizzaPurchaseFailure, pizzaFactoryLatency, chaosToggle, chaosInjectedFailure, chaosClearFailures };
