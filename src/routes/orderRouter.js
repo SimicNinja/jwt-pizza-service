@@ -74,6 +74,14 @@ orderRouter.get(
   })
 );
 
+orderRouter.post('/', (req, res, next) => {
+  if (enableChaos && Math.random() < 0.5) {
+    metrics.chaosInjectedFailure();
+    throw new StatusCodeError('Chaos monkey', 500);
+  }
+  next();
+});
+
 // createOrder
 orderRouter.post(
   '/',
@@ -112,6 +120,20 @@ orderRouter.post(
       statusCode: r.status,
       responseBody: j,
     });
+  })
+);
+
+let enableChaos = false;
+orderRouter.put(
+  '/chaos/:state',
+  authRouter.authenticateToken,
+  asyncHandler(async (req, res) => {
+    if (req.user.isRole(Role.Admin)) {
+      enableChaos = req.params.state === 'true';
+      metrics.chaosToggle(enableChaos);
+    }
+
+    res.json({ chaos: enableChaos });
   })
 );
 

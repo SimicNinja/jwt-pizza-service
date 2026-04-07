@@ -9,6 +9,7 @@ const ACTIVE_USER_WINDOW = 5 * 60 * 1000; // 5 minutes in milliseconds
 let authAttempts = { success: 0, failure: 0 };
 let pizzaMetrics = { sold: 0, failures: 0, revenue: 0 };
 let latencyMetrics = { service: 0, factory: 0 };
+let chaosMetrics = { enabled: 0, toggles: 0, injectedFailures: 0 };
 
 // Middleware to track requests
 function requestTracker(req, res, next) {
@@ -55,6 +56,15 @@ function pizzaFactoryLatency(duration) {
 	latencyMetrics.factory += duration;
 }
 
+function chaosToggle(enabled) {
+	chaosMetrics.enabled = enabled ? 1 : 0;
+	chaosMetrics.toggles++;
+}
+
+function chaosInjectedFailure() {
+	chaosMetrics.injectedFailures++;
+}
+
 // This will periodically send metrics to Grafana
 setInterval(() => {
 	const metrics = [];
@@ -97,6 +107,11 @@ setInterval(() => {
 	// Send latency metrics (cumulative milliseconds)
 	metrics.push(createMetric('serviceLatency', latencyMetrics.service, 'ms', 'sum', 'asInt', {}));
 	metrics.push(createMetric('factoryLatency', latencyMetrics.factory, 'ms', 'sum', 'asInt', {}));
+
+	// Send chaos metrics
+	metrics.push(createMetric('chaosEnabled', chaosMetrics.enabled, '1', 'gauge', 'asInt', {}));
+	metrics.push(createMetric('chaosToggles', chaosMetrics.toggles, '1', 'sum', 'asInt', {}));
+	metrics.push(createMetric('chaosInjectedFailures', chaosMetrics.injectedFailures, '1', 'sum', 'asInt', {}));
 
 	sendMetricToGrafana(metrics);
 }, 10000);
@@ -179,4 +194,4 @@ function getMemoryUsagePercentage() {
 	return memoryUsage.toFixed(2);
 }
 
-module.exports = { requestTracker, authAttemptSuccess, authAttemptFailure, pizzaPurchaseSuccess, pizzaPurchaseFailure, pizzaFactoryLatency };
+module.exports = { requestTracker, authAttemptSuccess, authAttemptFailure, pizzaPurchaseSuccess, pizzaPurchaseFailure, pizzaFactoryLatency, chaosToggle, chaosInjectedFailure };
