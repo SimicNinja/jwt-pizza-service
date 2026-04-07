@@ -64,6 +64,10 @@ function chaosInjectedFailure() {
 	chaosMetrics.injectedFailures++;
 }
 
+function chaosClearFailures() {
+	chaosMetrics.injectedFailures = 0;
+}
+
 // This will periodically send metrics to Grafana
 setInterval(() => {
 	const metrics = [];

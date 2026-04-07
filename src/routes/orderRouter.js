@@ -144,6 +144,7 @@ orderRouter.put(
     if (req.user.isRole(Role.Admin)) {
       enableChaos = false;
       metrics.chaosToggle(enableChaos);
+      metrics.chaosClearFailures();
       logger.log('error', 'chaosKill', { message: 'Chaos killed by admin', userId: req.user.id });
     }
 
