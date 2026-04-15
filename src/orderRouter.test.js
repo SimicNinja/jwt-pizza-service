@@ -59,18 +59,35 @@ test('Add item to menu as non-admin', async () => {
 });
 
 test('Create order', async () => {
-	const orderData = { franchiseId: 1, storeId: 1, items: [{ menuId: testMenuItemId, description: 'Veggie', price: 0.05 }] };
-	const res = await request(app)
-		.post('/api/order')
-		.set('Authorization', `Bearer ${testUserAuthToken}`)
-		.send(orderData);
+    // Create a franchise and store first
+    const franchiseName = `Test Franchise ${Date.now()}`;
+    const storeName = `Test Store ${Date.now()}`;
+    const franchiseRes = await request(app)
+        .post('/api/franchise')
+        .set('Authorization', `Bearer ${adminAuthToken}`)
+        .send({ name: franchiseName, admins: [{ email: adminUser.email }] });
+    const franchiseId = franchiseRes.body.id;
 
-	console.log(res.statusCode);
-	console.log(res.body);
+    const storeRes = await request(app)
+        .post(`/api/franchise/${franchiseId}/store`)
+        .set('Authorization', `Bearer ${adminAuthToken}`)
+        .send({ name: storeName });
+    const storeId = storeRes.body.id;
 
-	expect(res.statusCode).toBe(200);
-	expect(res.body).toMatchObject({
-		order: { franchiseId: 1, storeId: 1, items: [{ menuId: testMenuItemId, description: 'Veggie', price: 0.05 }] },
-		jwt: expect.any(String),
-	});
+    // Send only menuId (not price or description)
+    const orderData = { 
+        franchiseId: franchiseId, 
+        storeId: storeId, 
+        items: [{ menuId: testMenuItemId }] 
+    };
+    const res = await request(app)
+        .post('/api/order')
+        .set('Authorization', `Bearer ${testUserAuthToken}`)
+        .send(orderData);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+        order: { franchiseId: franchiseId, storeId: storeId, items: [{ menuId: testMenuItemId, description: 'Veggie Piaaz' }] },
+        jwt: expect.any(String),
+    });
 });

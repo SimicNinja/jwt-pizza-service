@@ -90,86 +90,86 @@ orderRouter.post(
     const orderReq = req.body;
     const {franchiseId, storeId, items} = orderReq;
 
-    // Validate store and get franchise
-    const store = await DB.query(
-      (await DB.getConnection()),
-      'SELECT franchiseId FROM store WHERE id = ?',
-      [storeId]
-    );
-    if(!store || store.length === 0)
-    {
-      throw new StatusCodeError('Store not found', 400);
-    }
-
-    // Verify storeId belongs to declared franchiseId
-    const dbFranchiseId = store[0].franchiseId;
-    if(dbFranchiseId !== franchiseId)
-    {
-      throw new StatusCodeError('Store does not belong to the specified franchise', 400);
-    }
-
-    // Fetch menu prices from database
-    const menuIds = items.map(item => item.menuId);
     const connection = await DB.getConnection();
-    const menuItems = await DB.query(
-      connection,
-      `SELECT id, price FROM menu WHERE id IN (${menuIds.map(() => '?').join(',')})`,
-      menuIds
-    );
-    connection.end();
+    try {
+      // Validate store and get franchise
+      const store = await DB.query(
+        connection,
+        'SELECT franchiseId FROM store WHERE id = ?',
+        [storeId]
+      );
+      if (!store || store.length === 0) {
+        throw new StatusCodeError('Store not found', 400);
+      }
 
-    // Verify all menu items exist
-    if(menuItems.length !== menuIds.length)
-    {
-      throw new StatusCodeError('One or more menu items not found', 400);
+      // Verify storeId belongs to declared franchiseId
+      const dbFranchiseId = store[0].franchiseId;
+      if (dbFranchiseId !== franchiseId) {
+        throw new StatusCodeError('Store does not belong to the specified franchise', 400);
+      }
+
+      // Fetch menu details from database
+      const menuIds = items.map((item) => item.menuId);
+      const menuItems = await DB.query(
+        connection,
+        `SELECT id, description, price FROM menu WHERE id IN (${menuIds.map(() => '?').join(',')})`,
+        menuIds
+      );
+
+      // Verify all menu items exist
+      if (menuItems.length !== menuIds.length) {
+        throw new StatusCodeError('One or more menu items not found', 400);
+      }
+
+      // Reconstruct order items from database values to prevent tampering
+      const confirmedOrder = {
+        franchiseId,
+        storeId,
+        items: items.map((clientItem) => {
+          const menuItem = menuItems.find((mi) => mi.id === clientItem.menuId);
+          return {
+            menuId: clientItem.menuId,
+            description: menuItem.description,
+            price: menuItem.price,
+          };
+        }),
+      };
+
+      const order = await DB.addDinerOrder(req.user, confirmedOrder);
+      const orderInfo = { diner: { id: req.user.id, name: req.user.name, email: req.user.email }, order };
+      logger.log('info', 'factory', orderInfo);
+
+      // Calculate pizza metrics
+      const numPizzas = order.items.length;
+      const totalRevenue = order.items.reduce((sum, item) => sum + Number(item.price), 0);
+
+      // Track factory latency
+      const factoryStartTime = Date.now();
+      const r = await fetch(`${config.factory.url}/api/order`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', authorization: `Bearer ${config.factory.apiKey}` },
+        body: JSON.stringify({ diner: { id: req.user.id, name: req.user.name, email: req.user.email }, order }),
+      });
+      const factoryDuration = Date.now() - factoryStartTime;
+      metrics.pizzaFactoryLatency(factoryDuration);
+
+      const j = await r.json();
+      if (r.ok) {
+        metrics.pizzaPurchaseSuccess(numPizzas, totalRevenue);
+        res.send({ order, followLinkToEndChaos: j.reportUrl, jwt: j.jwt });
+      } else {
+        metrics.pizzaPurchaseFailure(numPizzas);
+        res.status(500).send({ message: 'Failed to fulfill order at factory', followLinkToEndChaos: j.reportUrl });
+      }
+
+      logger.log(r.ok ? 'info' : 'warn', 'factory', {
+        event: 'factory_response',
+        statusCode: r.status,
+        responseBody: j,
+      });
+    } finally {
+      connection.end();
     }
-
-    // Reconstruct order items with prices from database to prevent tampering
-    const confirmedOrder = {
-      franchiseId,
-      storeId,
-      items: items.map(clientItem => {
-        const menuItem = menuItems.find(mi => mi.id === clientItem.menuId);
-        return {
-          menuId: clientItem.menuId,
-          description: clientItem.description,
-          price: menuItem.price, // Use price from database
-        };
-      })
-    };
-
-    const order = await DB.addDinerOrder(req.user, confirmedOrder);
-    const orderInfo = { diner: { id: req.user.id, name: req.user.name, email: req.user.email }, order };
-    logger.log('info', 'factory', orderInfo);
-
-    // Calculate pizza metrics
-    const numPizzas = order.items.length;
-    const totalRevenue = order.items.reduce((sum, item) => sum + Number(item.price), 0);
-
-    // Track factory latency
-    const factoryStartTime = Date.now();
-    const r = await fetch(`${config.factory.url}/api/order`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', authorization: `Bearer ${config.factory.apiKey}` },
-      body: JSON.stringify({ diner: { id: req.user.id, name: req.user.name, email: req.user.email }, order }),
-    });
-    const factoryDuration = Date.now() - factoryStartTime;
-    metrics.pizzaFactoryLatency(factoryDuration);
-
-    const j = await r.json();
-    if (r.ok) {
-      metrics.pizzaPurchaseSuccess(numPizzas, totalRevenue);
-      res.send({ order, followLinkToEndChaos: j.reportUrl, jwt: j.jwt });
-    } else {
-      metrics.pizzaPurchaseFailure(numPizzas);
-      res.status(500).send({ message: 'Failed to fulfill order at factory', followLinkToEndChaos: j.reportUrl });
-    }
-
-    logger.log(r.ok ? 'info' : 'warn', 'factory', {
-      event: 'factory_response',
-      statusCode: r.status,
-      responseBody: j,
-    });
   })
 );
 
