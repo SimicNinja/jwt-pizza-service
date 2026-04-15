@@ -88,6 +88,56 @@ orderRouter.post(
   authRouter.authenticateToken,
   asyncHandler(async (req, res) => {
     const orderReq = req.body;
+    const {franchiseId, storeId, items} = orderReq;
+
+    // Validate store and get franchise
+    const store = await DB.query(
+      (await DB.getConnection()),
+      'SELECT franchiseId FROM store WHERE id = ?',
+      [storeId]
+    );
+    if(!store || store.length === 0)
+    {
+      throw new StatusCodeError('Store not found', 400);
+    }
+
+    // Verify storeId belongs to declared franchiseId
+    const dbFranchiseId = store[0].franchiseId;
+    if(dbFranchiseId !== franchiseId)
+    {
+      throw new StatusCodeError('Store does not belong to the specified franchise', 400);
+    }
+
+    // Fetch menu prices from database
+    const menuIds = items.map(item => item.menuId);
+    const connection = await DB.getConnection();
+    const menuItems = await DB.query(
+      connection,
+      `SELECT id, price FROM menu WHERE id IN (${menuIds.map(() => '?').join(',')})`,
+      menuIds
+    );
+    connection.end();
+
+    // Verify all menu items exist
+    if(menuItems.length !== menuIds.length)
+    {
+      throw new StatusCodeError('One or more menu items not found', 400);
+    }
+
+    // Reconstruct order items with prices from database to prevent tampering
+    const confirmedOrder = {
+      franchiseId,
+      storeId,
+      items: items.map(clientItem => {
+        const menuItem = menuItems.find(mi => mi.id === clientItem.menuId);
+        return {
+          menuId: clientItem.menuId,
+          description: clientItem.description,
+          price: menuItem.price, // Use price from database
+        };
+      })
+    };
+
     const order = await DB.addDinerOrder(req.user, orderReq);
     const orderInfo = { diner: { id: req.user.id, name: req.user.name, email: req.user.email }, order };
     logger.log('info', 'factory', orderInfo);
