@@ -138,7 +138,7 @@ orderRouter.post(
       })
     };
 
-    const order = await DB.addDinerOrder(req.user, orderReq);
+    const order = await DB.addDinerOrder(req.user, confirmedOrder);
     const orderInfo = { diner: { id: req.user.id, name: req.user.name, email: req.user.email }, order };
     logger.log('info', 'factory', orderInfo);
 
